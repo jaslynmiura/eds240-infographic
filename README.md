@@ -4,6 +4,10 @@ This repository contains materials that creates the infographic for the final pr
 
 ## File Structure
 ```
+├── data
+│   └── Materials_Municipal_Waste_Stream_1960_2018.xlsx
+├── eds240-infographic.Rproj
+└── README.md
 ```
 
 ## Data
