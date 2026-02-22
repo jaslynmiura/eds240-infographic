@@ -50,3 +50,6 @@ rsconnect/
 
 # ignore the data folder
 data/
+
+# ignore the test script
+test.R
