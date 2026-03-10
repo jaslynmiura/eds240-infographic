@@ -53,3 +53,9 @@ data/
 
 # ignore the test script
 test.R
+
+# ignore the images folder
+images/
+
+# ignore creating-viz_files
+creating-viz_files

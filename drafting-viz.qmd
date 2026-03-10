@@ -5,3 +5,502 @@ format: pdf
 date: 2026-02-22
 ---
 
+**Goal**: The goal with this data is to explore how the types and amount of natural disasters that have occurred around the world have varied since 1960-2018.
+
+**Questions of Interest:** 
+What type natural disasters occur the most around the world?
+Which countries experience the most natural disasters per year around the world?
+How have the distribution of natural disasters changed over the years (type and count)? Could the changing trends identify major shifts, such as the rise of climate change?
+
+**Find at least two data visualizations that you could (potentially) borrow / adapt pieces from. Download and embed them into your drafting-viz.qmd file, and explain which elements you might borrow (e.g. the graphic form, legend design, layout, etc.).**
+
+![](images/example_1.png)
+
+![](images/example_2.png)
+
+For the first example, I like how the graphic displays many different tiles. Since I also have a lot of different countries within my data set, I thought this would also be a good way to display my data. I still think there's a lot of information being displayed, so instead I would maybe make different panels for each type of natural disaster, which would simplify the trends.
+
+For the next example, I like how the stream makes the trends appear. I thought this graph would be a good way to display the flood data, as it has a flowy, water-like aesthetic to it. However, after receiving some feedback I found that it was a bit hard to really understand the trends since the audience would have to try to differentiate the sizes of the flows on their own. This example is aesthetically pleasing but not the most effective. If I were to implement this graph I would have to include a descriptive caption/annotations.
+
+#### Drawing of Data Viz Draft
+
+![](images/drawing_draft.jpeg)
+
+```{r, warning=FALSE, message=FALSE}
+# load necessary libraries
+library(tidyverse)
+library(dplyr)
+library(paletteer)
+library(lubridate)
+library(showtext)
+library(sysfonts)
+library(stringr)
+library(ggstream)
+library(cowplot)
+library(ggplot2)
+library(rnaturalearth)
+library(sf)
+#install.packages("ggimage")
+library(ggimage)
+#install.packages("countrycode")
+library(countrycode)
+
+```
+
+```{r, message=FALSE}
+# read in natural disaster world data
+nat_dis <- read_csv(here::here("data", "pend-gdis-1960-2018-disasterlocations-csv", "pend-gdis-1960-2018-disasterlocations.csv")) %>%
+  mutate(year = as.integer(year)) %>% 
+  filter(disastertype %in% c("earthquake", "flood", "storm", "drought", "extreme temperature"))
+```
+
+```{r}
+# add special fonts
+font_add_google(name = "Sarala", family = "sarala")
+font_add_google(name = "Noto Sans", family = "noto-sans")
+font_add_google(name = "Red Hat Mono", family = "red")
+```
+
+```{r, message=FALSE}
+
+showtext.auto(enable = TRUE)
+
+# summarize the count of natural disasters
+nat_dis %>% 
+  count(year, name = "total_disasters") %>%  
+  # create a line graph
+  ggplot(aes(x = year, y = total_disasters)) +
+  # add a vline to represent climate change
+  geom_vline(xintercept = 1980,
+             color = "grey40") +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.5) +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(title = "Global Natural Disasters Per Year (1960–2018)",
+       x = "Year",
+       y = "Total Natural Disasters") +
+  theme_minimal() +
+  annotate("text",
+         x = 1980,
+         y = 1000,
+         label = "Global Warming Acceleration",
+         angle = 90,
+         vjust = -0.5,
+         family = "red",
+         size = 2)+
+  theme(
+    plot.title = ggtext::element_markdown(family = "sarala",
+                                          face = "bold",
+                                          lineheight = 1.2),
+    axis.text = element_text(family = "red",
+                             size = rel(0.7)),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(family = "noto-sans",
+                                size = rel(0.75), 
+                                margin = margin(t = 15,
+                                                r = 15)),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank()
+  )
+```
+
+```{r, message=FALSE}
+sf_use_s2(FALSE)
+
+# convert data into sf objects
+nat_dis_sf <- nat_dis %>% 
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+# load world country boundaries as an sf object
+world <- ne_countries(scale = "small", returnclass = "sf") %>% 
+  st_transform(4326)
+
+# join nat_dis data with the world boundaries 
+nat_dis_joined <- st_join(nat_dis_sf, world, join = st_within)
+
+# get the count of the natural disasters
+country_totals <- nat_dis_joined %>% 
+  st_drop_geometry() %>%       
+  count(name, name = "total_disasters")
+
+# join count data to sf objects
+world_map <- world %>% 
+  left_join(country_totals, by = "name") 
+
+# create a cholorpleth
+ggplot(world_map) +
+  geom_sf(aes(fill = total_disasters), color = NA) +
+  scale_fill_paletteer_c("grDevices::Reds",
+                         na.value = "grey90",
+                         name = "Total Disasters",
+                         breaks = c(0, 1000, 2000, 3000, 4000), direction = -1) +
+  labs(title = "Global Distribution of Natural Disasters (1960–2018)") +
+  theme_minimal() +
+  theme(
+    plot.title = ggtext::element_markdown(family = "sarala",
+                                          face = "bold",
+                                          lineheight = 1.2),
+    axis.text = element_text(family = "red",
+                             size = rel(0.7)),
+    axis.title.x = element_text(family = "noto-sans",
+                                size = rel(0.75), 
+                                margin = margin(t = 15)),
+    axis.title.y = element_text(family = "noto-sans",
+                                size = rel(0.75), 
+                                margin = margin(t = 15)),
+    legend.text = element_text(family = "red",
+                                size = rel(0.75), 
+                                margin = margin(t = 15)),
+    legend.title = element_text(family = "red",
+                                face= "bold",
+                                size = rel(0.75), 
+                                margin = margin(t = 15)))
+```
+
+```{r}
+showtext.auto(enable = TRUE)
+
+# summarize the top 10 countries
+top10 <- nat_dis %>% 
+  count(country, year, name = "disaster_count") %>% 
+  group_by(country) %>% 
+  summarize(country_sum = sum(disaster_count), 
+            .groups = "drop") %>%  
+  slice_max(country_sum, n = 10) %>%             
+  mutate(iso2 = countrycode(country, origin = "country.name", destination = "iso2c"),
+         flag = paste0("https://flagcdn.com/w40/", tolower(iso2), ".png"),
+         country = fct_reorder(country, country_sum))
+# create a bar chart
+ggplot(top10, aes(x = country_sum, y = country)) +
+  geom_col(fill = "grey40",
+           alpha = 0.6) +
+  # add flag images to associated country
+  geom_image(aes(image = flag), x = 0 * max(top10$country_sum), size = rel(0.05))  +
+  scale_x_continuous(labels = scales::label_comma()) +
+  labs(title = "Top 10 Countries for the Total Number of Natural Disasters (1960-2018)",
+       x = "Number of Natural Disasters",
+       y = "Country") +
+  theme_minimal() +
+  theme(
+    plot.title = ggtext::element_markdown(family = "sarala",
+                                          face = "bold",
+                                          lineheight = 1.2,
+                                          size = rel(1.2),
+                                          hjust = 0.5),
+    axis.text = element_text(family = "red",
+                             size = rel(0.7)),
+    axis.title.x = element_text(family = "noto-sans",
+                                size = rel(1), 
+                                margin = margin(t = 15)),
+    axis.title.y = element_blank())
+```
+
+```{r}
+
+pop_avg_6018 <- pop_long %>% 
+  filter(year >= 1960, year <= 2018) %>% 
+  group_by(country_name) %>% 
+  summarise(avg_population = mean(population, na.rm = TRUE), .groups = "drop")
+
+mismatched <- anti_join(country_totals, pop_long, by = c("name" = "country_name"))
+
+top10_percap <- country_totals %>% 
+  left_join(pop_avg_6018, by = c("name" = "country_name")) %>% 
+  mutate(dis_per_million = total_disasters / avg_population * 1e6) %>% 
+  filter(name %in% c(
+    "United States of America","Philippines","India","China","Japan",
+    "Thailand","Indonesia","Bangladesh","Vietnam","Peru"
+  ))
+
+top10_percap <- country_totals %>% 
+  left_join(pop_long, 
+            by = c("name" = "country_name")) %>% 
+  mutate(dis_per_million = total_disasters / population * 1e6) %>% 
+  filter(name %in% c(
+    "United States","Philippines","India","China","Japan",
+    "Thailand","Indonesia","Bangladesh","Vietnam","Peru"
+  ))
+
+country_totals <- dis_pop %>% 
+  group_by(country) %>% 
+  summarise(
+    total_disasters = sum(disaster_count, na.rm = TRUE),
+    mean_population = mean(population, na.rm = TRUE)
+  )
+
+country_totals <- dis_pop %>% 
+  group_by(iso3, country) %>% 
+  summarise(
+    total_disasters = sum(disaster_count, na.rm = TRUE),
+    avg_population = mean(population, na.rm = TRUE))
+
+
+ggplot(top10_percap,
+       aes(x = dis_per_million,
+           y = reorder(country, dis_per_million))) +
+  geom_col(fill = "#A41D1A") +
+  labs(
+    title = "Natural Disasters per Million People (1960–2018)",
+    x = "Disasters per Million People",
+    y = "Country"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+
+# create a color palette for disasters
+pal <- c("drought" = "#D26A1B",
+         "earthquake" = "#568D4A",
+         "extreme temperature" = "#A41D1A",
+         "flood" = "#4378A0",
+         "storm" = "#F2D43E")
+
+# summarize data by country and type
+nat_dis %>% 
+  filter(country %in% c("United States", "Philippines", "India", "China", "Japan")) %>% 
+  group_by(country, disastertype) %>% 
+  summarise(disastertype_count = n(), 
+            .groups = "drop") %>% 
+  mutate(country = fct_reorder(country, disastertype_count)) %>% 
+# create a stacked bar chart
+  ggplot(aes(x = country, y = disastertype_count, fill = disastertype)) +
+  geom_col(position = "fill") +
+  scale_fill_manual(values = pal,
+                    labels = c("drought" = "Drought",
+                               "earthquake" = "Earthquake",
+                               "extreme temperature" = "Extreme\nTemperature",
+                               "flood" = "Flood",
+                               "storm" = "Storm")) +
+  scale_y_continuous(labels = scales::label_percent(scale = 100)) +
+  labs(x = "Country",
+       y = "Percentage of Disasters",
+       title = "Distribution of Disaster Types, by Percentages",
+       fill = "Disaster Type") +
+  theme_minimal() +
+  theme(
+    plot.title = ggtext::element_markdown(family = "sarala",
+                                          face = "bold",
+                                          lineheight = 1.2),
+    axis.text = element_text(family = "red",
+                             size = rel(0.7)),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(family = "noto-sans",
+                                size = rel(0.75), 
+                                margin = margin(t = 15)),
+    legend.position = "bottom",
+    legend.title.position = "bottom",
+    legend.direction = "horizontal",
+    legend.text = element_text(family = "red",
+                                size = rel(0.75), 
+                                margin = margin(t = 2)),
+    legend.title = element_blank(),
+    legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(0.5, "cm"))
+```
+
+![](images/country_proportions.png)
+
+```{r}
+#| fig-width: 14
+#| fig-height: 12
+
+# get the top 25 countries
+top25 <- nat_dis %>% 
+  count(country, name = "country_sum") %>% 
+  slice_max(country_sum, n = 25) %>% 
+  pull(country)
+
+# filter nat_dis based on top 25
+nat_dis %>% 
+  filter(country %in% top25) %>% 
+  count(country, year, disastertype, name = "disaster_count") %>% 
+  # create stream graph
+  ggplot(aes(x = year, y = disaster_count, fill = disastertype)) +
+  geom_stream(type = "proportional") +
+  geom_vline(xintercept = 1980, 
+             col = "grey40") +
+  scale_fill_manual(values = pal,
+                    labels = c("drought" = "Drought",
+                               "earthquake" = "Earthquake",
+                               "extreme temperature" = "Extreme\nTemperature",
+                               "flood" = "Flood",
+                               "storm" = "Storm")) +
+   scale_x_continuous(breaks = c(1960, 1980, 2000, 2018)) +
+  # facet by country
+  facet_wrap(~ country, ncol = 5) +
+  labs(title = "Disaster Type Proportion Between 1980-2018 (Top 25 Countries by Total Disasters)",
+       x = "Year",
+       y = "Proportion of Disasters",
+       fill = "Disaster type") +
+  theme_minimal() +
+  theme(
+    plot.title = ggtext::element_markdown(family = "sarala",
+                                          face = "bold",
+                                          lineheight = 1.2),
+    axis.text = element_text(family = "red",
+                             size = rel(0.7)),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(family = "noto-sans",
+                                size = rel(0.75), 
+                                margin = margin(t = 15,
+                                                r = 15)),
+    legend.position = "bottom",
+    legend.title.position = "bottom",
+    legend.direction = "horizontal",
+    legend.text = element_text(family = "red",
+                                size = rel(0.75), 
+                                margin = margin(t = 2)),
+    legend.title = element_blank(),
+    legend.key.width = unit(0.5, "cm"),
+    panel.spacing.x = unit(1.3, "lines"))
+```
+
+MAJOR TAKE AWAY: 
+
+
+```{r}
+pop <- read_csv(here::here("data", "world_population", "population.csv"), skip = 2)
+
+library(readr)
+library(dplyr)
+library(janitor)
+
+pop <- read_csv(
+  here::here("data", "world_population", "population.csv"),
+  skip = 4,                 # start at the real header
+  show_col_types = FALSE
+) %>% 
+  select(where(~ !all(is.na(.))))
+
+pop_long <- pop %>% 
+  pivot_longer(
+    cols = `1960`:`2024`,
+    names_to = "year",
+    values_to = "population"
+  ) %>% 
+  mutate(year = as.integer(year)) %>% 
+  clean_names() %>% 
+  select(country_name, year, population, country_code)
+
+dis_year <- nat_dis %>% 
+  count(country, iso3, year, name = "disaster_count")
+
+dis_pop <- dis_year %>% 
+  left_join(pop_long, 
+            by = c("iso3" = "country_code", "year")) %>% 
+  mutate(dis_per_million = disaster_count / population * 1e6)
+
+country_totals <- dis_pop %>% 
+  group_by(country) %>% 
+  summarise(
+    total_disasters = sum(disaster_count, na.rm = TRUE),
+    mean_population = mean(population, na.rm = TRUE)
+  )
+
+country_totals <- dis_pop %>% 
+  group_by(iso3, country) %>% 
+  summarise(
+    total_disasters = sum(disaster_count, na.rm = TRUE),
+    avg_population = mean(population, na.rm = TRUE),
+    dis_per_million = total_disasters / avg_population * 1e6
+  )
+
+pop_dis_map <- left_join(world_map, country_totals, by = c("adm0_a3" = "iso3"))
+
+ggplot(pop_dis_map) +
+  geom_sf(aes(fill = dis_per_million), color = NA) +
+  scale_fill_paletteer_c(
+  "grDevices::Reds",
+  #breaks = c(0, 5, 10, 25, 50, 100),
+  #limits = c(0, 100),
+  na.value = "grey90",
+  name = "Disasters per million",
+  #direction = -1
+) +
+  labs(title = "Global Distribution of Natural Disasters (1960–2018)") +
+  theme_minimal() +
+  theme(
+    plot.title = ggtext::element_markdown(family = "sarala",
+                                          face = "bold",
+                                          lineheight = 1.2),
+    axis.text = element_text(family = "red",
+                             size = rel(0.7)),
+    axis.title.x = element_text(family = "noto-sans",
+                                size = rel(0.75), 
+                                margin = margin(t = 15)),
+    axis.title.y = element_text(family = "noto-sans",
+                                size = rel(0.75), 
+                                margin = margin(t = 15)),
+    legend.text = element_text(family = "red",
+                                size = rel(0.75), 
+                                margin = margin(t = 15)),
+    legend.title = element_text(family = "red",
+                                face= "bold",
+                                size = rel(0.75), 
+                                margin = margin(t = 15)))
+
+
+```
+
+```{r}
+top10_nat_pop <- country_totals %>% 
+  # count(country, year, name = "disaster_count") %>% 
+  # group_by(country) %>% 
+  # summarize(country_sum = sum(disaster_count), 
+  #           .groups = "drop") %>%  
+  slice_max(dis_per_million, n = 10) %>%             
+  mutate(iso3 = countrycode(country, origin = "country.name", destination = "iso2c"),
+         flag = paste0("https://flagcdn.com/w40/", tolower(iso2), ".png"))
+        # country = fct_reorder(country, country_sum))
+
+top10_nat_pop <- country_totals %>% 
+  ungroup() %>% 
+  slice_max(dis_per_million, n = 10, with_ties = FALSE) %>% 
+  mutate(
+    iso2 = countrycode(country, origin = "country.name", destination = "iso2c"),
+    flag = paste0("https://flagcdn.com/w40/", tolower(iso2), ".png")
+  )
+# create a bar chart
+ggplot(top10_nat_pop, aes(x = country_sum, y = country)) +
+  geom_col(fill = "grey40",
+           alpha = 0.6) +
+  # add flag images to associated country
+  geom_image(aes(image = flag), x = 0 * max(top10$country_sum), size = rel(0.05))  +
+  scale_x_continuous(labels = scales::label_comma()) +
+  labs(title = "Top 10 Countries for the Total Number of Natural Disasters (1960-2018)",
+       x = "Number of Natural Disasters",
+       y = "Country") +
+  theme_minimal() +
+  theme(
+    plot.title = ggtext::element_markdown(family = "sarala",
+                                          face = "bold",
+                                          lineheight = 1.2,
+                                          size = rel(1.2),
+                                          hjust = 0.5),
+    axis.text = element_text(family = "red",
+                             size = rel(0.7)),
+    axis.title.x = element_text(family = "noto-sans",
+                                size = rel(1), 
+                                margin = margin(t = 15)),
+    axis.title.y = element_blank())
+```
+
+
+
+**1. What are the key insights you want your infographic to communicate, and how will your design choices help highlight and support those messages?**
+
+I think while the line graph and bar graph are simple, their simplicity help communicate the important take aways from the data, where as a whole (globally) the trend of natural disasters increased with climate change. I also think including the chloropleth map is important in visualizing where the occurrence of the most natural disasters happen. The way I envision my data viz, is by starting out broad and getting a more specific as you travel through the document.
+
+**2. What challenges did you encounter or anticipate encountering as you continue to build / iterate on your visualizations in R? If you struggled with mocking up any of your three visualizations, describe those challenges here.**
+
+Some challenges I encountered and noticed within my data is missing data for certain countries, while I think this challenge is displayed in a way for the audience to understand that there is a lack of data, I worry that this could affect understanding the trends, especially the change in the amount of natural disasters before and after the rise of climate change. The way I envision my data viz, is by starting out broad and getting a more specific as you travel through the document.
+
+**3. What ggplot extension tools / packages do you need to use to build your visualizations? Are there any that we haven’t covered in class that you’ll be learning how to use for your visualizations?**
+
+`ggstream` and `cowplot` packages were implemented after I adapted the code from other tidytuesday authors. `rnaturalearth` was used to create the cholorpleth map. `countrycode` and `ggimage` was used to add the image of the country flag to bar plots. I used affinity to fill the counrty shape with the stacked bar chart.
+
+**4. What feedback do you need from the instructional team and / or your peers to ensure that your intended message and key insights are clear?**
+
+I would like to know how readable or understandable my plots. If there are any suggestions on other ways I could highlight the trends in my data. Especially through different creative plots. Since I have a dataset that covers information on such a large scale I'm having a hard time deciding how to scale down the data or identifing the most effective ways in displaying all the information, without my plots looking too busy.

@@ -22,8 +22,11 @@ library(lubridate)
 ```{r}
 # read in natural disaster world data
 nat_dis <- read_csv(here::here("data", "pend-gdis-1960-2018-disasterlocations-csv", "pend-gdis-1960-2018-disasterlocations.csv")) %>% 
-  mutate(year = ymd(year, truncated = 2))
+  mutate(year = ymd(year, truncated = 2)) %>% 
+  filter(disastertype %in% c("earthquake", "flood", "storm", "drought", "extreme temperature"))
 ```
+
+
 ```{r}
 # filter world data to the U.S.
 us <- nat_dis %>% 
