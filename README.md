@@ -2,16 +2,24 @@
 
 This repository contains materials that creates the infographic for the final project of the course EDS 240- Data Visualization & Communication.
 
-![](data/images/info_final.png)
+![](info_final.png)
 
 ## File Structure
 ```
+├── creating-viz_files
+├── creating-viz.qmd
 ├── data
+│   ├── internally-displaced-persons-from-disasters
 │   ├── pend-gdis-1960-2018-disasterlocations-csv
+│   └── world_population
+├── drafting-viz.pdf
 ├── drafting-viz.qmd
 ├── eds240-infographic.Rproj
 ├── explorations.pdf
 ├── explorations.qmd
+├── images
+├── info_final.png
+├── README.html
 └── README.md
 ```
 
