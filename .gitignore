@@ -58,4 +58,4 @@ test.R
 images/
 
 # ignore creating-viz_files
-creating-viz_files
+creating-viz_files/

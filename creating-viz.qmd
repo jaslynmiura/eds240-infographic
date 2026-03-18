@@ -12,13 +12,6 @@ What type natural disasters occur the most around the world?
 Which countries experience the most natural disasters per year around the world?
 How have the distribution of natural disasters changed over the years (type and count)? Could the changing trends identify major shifts, such as the rise of climate change?
 
-## Introduction
-**1. Open with an engaging introduction, which states any necesssary background, your motivation, question(s), data / data source(s), and goal(s) of your visualization.**
-
-
-### Final Infographic
-**2. Embed / render your final infographic following your introduction. If you are embedding a png file, ensure that it’s centered and an apppropriate size. The same applies if you are rendering your infographic from code, though you should additionally ensure that:**
-
 ```{r, warning=FALSE, message=FALSE}
 # load necessary libraries
 library(tidyverse)
@@ -38,17 +31,26 @@ library(ggimage)
 #install.packages("countrycode")
 library(countrycode)
 library(janitor)
+library(gghighlight)
+library(waffle)
 ```
 
 ## Loading Data
 ```{r, message=FALSE}
-# read in natural disaster world data
+# read in natural disaster world data.
 nat_dis <- read_csv(here::here("data", "pend-gdis-1960-2018-disasterlocations-csv", "pend-gdis-1960-2018-disasterlocations.csv")) %>%
   mutate(year = as.integer(year)) %>% 
   filter(disastertype %in% c("earthquake", "flood", "storm", "drought", "extreme temperature"))
 
+# read in population world data.
 pop <- read_csv(here::here("data", "world_population", "population.csv"), skip = 4, show_col_types = FALSE) %>% 
   select(where(~ !all(is.na(.))))
+
+# read in displaced world data. (2008-2018)
+displaced <- read_csv(here::here("data", 
+                                 "internally-displaced-persons-from-disasters",
+                                 "internally-displaced-persons-from-disasters.csv")) %>% 
+  rename("displaced" = "Internally displaced persons, new displacement associated with disasters (number of cases)")
 ```
 
 ```{r}
@@ -69,151 +71,157 @@ pop_long <- pop %>%
 
 ```{r}
 # add special fonts
-font_add_google(name = "Sarala", family = "sarala")
-font_add_google(name = "Noto Sans", family = "noto-sans")
-font_add_google(name = "Red Hat Mono", family = "red")
+font_add_google(name = "Space Grotesk", family = "sans-serif") # axis details and numbers
+font_add_google(name = "Bricolage Grotesque", family = "bricolage") # titles, captions
+
+# creating a color palette
+"grey_blue" <- "#8896A7" # bar color
+"pale_blue" <- "#A1BBDD" # text color
+"dark_grey" <- "#4D4D4D" # plot background details
+
+# create a color palette for disasters
+pal <- c("drought" = "#663317",
+         "earthquake" = "#0B4A32",
+         "extreme temperature" = "#783682",
+         "flood" = "#75B9B0",
+         "storm" = "#E89300")
 ```
 
 
 ### Line Graph
 ```{r, message=FALSE}
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                  Total Natural Disaster Trend (1960-2018)                ----
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#.........................Summarize Data.........................
+
+# Create the `yearly_total` dataframe.
+yearly_total <- nat_dis %>% 
+  # Get the total number of disasters per year.
+  count(year, name = "total_disasters")
+
+#............................Line Plot...........................
 
 showtext.auto(enable = TRUE)
 
-# summarize the count of natural disasters
-disaster_counts_line <- nat_dis %>% 
-  count(year, name = "total_disasters")
-
-# create a line graph
-line_trend <- ggplot(data = disaster_counts_line, aes(x = year, y = total_disasters)) +
-  # add a vline to represent climate change
-  geom_vline(xintercept = 1980,
-             color = "firebrick",
-             alpha = 0.7) +
+# Create a line graph.
+line_trend <- ggplot(data = yearly_total, aes(x = year, y = total_disasters)) +
   geom_line() +
   geom_point(size = 0.4) +
   scale_x_continuous(limits = c(1960, 2018),
                      breaks = c(seq(1960, 2015, by = 20), 2018)) +
   scale_y_continuous(labels = scales::label_comma()) +
   labs(y = "Total Natural Disasters",
-       caption = "Data Source: NASA EarthData") +
-  theme_minimal() +
-  annotate("text",
-           x = 1980,
-           y = 1000,
-           label = "Global Warming\nAcceleration",
-           angle = 90,
-           vjust = -0.5,
-           family = "red",
-           size = rel(1.6),
-           color = "firebrick") +
+       ) +
+  theme_minimal(base_size = 17) +
+  # Theme adjustments.
   theme(
-    plot.caption = ggtext::element_markdown(family = "noto-sans",
-                                            face = "italic",
-                                            color = "grey50",
-                                            size = rel(0.3),
-                                            margin = margin(t = 3)),
-    axis.text = element_text(family = "red"),
-    axis.text.y = element_text(size = rel(0.7)),
-    axis.text.x = element_text(size = rel(0.8)),
+    axis.text = element_text(family = "sans-serif",
+                             color = pale_blue),
+    axis.text.y = element_text(size = rel(1.5), 
+                               color = pale_blue),
+    axis.text.x = element_text(size = rel(1.5),
+                               color = pale_blue),
     axis.title.x = element_blank(),
-    axis.title.y = element_text(family = "noto-sans",
-                                size = rel(0.5), 
+    axis.title.y = element_text(family = "bricolage",
+                                size = rel(1.8), 
                                 margin = margin(t = 15,
-                                                r = 12)),
+                                                r = 12),
+                                color = pale_blue),
     panel.grid.minor.x = element_blank(),
     panel.grid.minor.y = element_blank(),
     panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_line(linetype = "dashed", 
+                                      color = dark_grey),
     panel.background = element_rect(fill = "transparent", color = NA),
     plot.background  = element_rect(fill = "transparent", color = NA))
-
-#...................set resolution to match GD...................
 showtext_opts(dpi = 300)
 
 ggsave(
   filename = here::here("images", "line_trend.pdf"),
   plot = line_trend,
   device = cairo_pdf,
-  width = 7, 
-  height = 2.5,
+  width = 21,
+  height = 5.2,
   units = "in")
 
 ggsave(
   filename = here::here("images", "line_trend.png"),
   plot = line_trend,
   device = png,
-  width = 7, 
-  height = 2.5,
+  width = 21,
+  height = 5.2,
   units = "in")
 
 ```
 
-### Bar Graph with Flags -- **FINAL**
+### Bar Graph with Flags
 ```{r}
-showtext.auto(enable = TRUE)
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                     Total Natural Disasters by Country                   ----
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# summarize the top 10 countries
+#.........................Summarize Data.........................
+
+# Create the `top_10` dataframe.
 top10_df <- nat_dis %>% 
+  # Get the yearly totals for each country.
   count(country, year, name = "disaster_count") %>% 
+  # Calculate the total of all events between 1960-2018.
   group_by(country) %>% 
   summarize(country_sum = sum(disaster_count), 
             .groups = "drop") %>%  
-  slice_max(country_sum, n = 10) %>%             
-  mutate(iso2 = countrycode(country, origin = "country.name", destination = "iso2c"),
+  # Select the top 10 countries.
+  slice_max(country_sum, n = 10) %>%    
+  # Add flag image source as a new column.
+  mutate(iso2 = countrycode(country, 
+                            origin = "country.name", 
+                            destination = "iso2c"),
          flag = paste0("https://flagcdn.com/w40/", tolower(iso2), ".png"),
          country = fct_reorder(country, country_sum))
 
-# create a bar chart
+#............................Bar Plot............................
+
+showtext.auto(enable = TRUE)
+
+# Create a bar chart.
 top10 <- ggplot(top10_df, aes(x = country_sum, y = country)) +
-  geom_col(fill = "#B8B8B8",
+  geom_col(fill = grey_blue,
            alpha = 0.5) +
+  # Add the total value to the end of the bar.
   geom_text(aes(label = scales::comma(country_sum)),
             hjust = -0.4, 
-            color = "black",
-            size = rel(1),
-            family = "red") +
-  # add flag images to associated country
+            color = pale_blue,
+            size = 7,
+            family = "sans-serif") +
+  # Add flag images to associated country.
   geom_image(aes(image = flag),
              x = max(top10_df$country_sum) * 0.03,
              size = 0.05,
              by = "width") +
-scale_x_continuous(labels = scales::label_comma(),
-                   expand = expansion(mult = c(0, 0.1))) +
-  labs(title = "Countries with the Most Recorded Natural Disasters",
-       subtitle = "From 1960-2018, the United States and the Philippines recorded the highest total number of disasters.",
-       x = "Number of Natural Disasters",
-       y = "Country",
-       caption = "Data Source: NASA EarthData") +
-  theme_minimal() +
+  # Expand the x-axis for for flag and total value placement.
+  scale_x_continuous(labels = scales::label_comma(),
+                     expand = expansion(mult = c(0, 0.1))) +
+  labs(x = "Number of Natural Disasters",) +
+  theme_minimal(base_size = 17) +
+  # Theme adjustments.
   theme(
-    plot.title = ggtext::element_markdown(family = "sarala",
-                                          face = "bold",
-                                          size = rel(0.5),
-                                          margin = margin(b = rel(0.8))),
-    plot.subtitle = ggtext::element_markdown(family = "sarala",
-                                             size = rel(0.2),
-                                             margin = margin(b = rel(0.8))),
-    axis.text = element_text(family = "red",
-                             size = rel(0.5)),
-    axis.text.y = element_text(size = rel(0.5),
-                               color = "black"),
-    axis.text.x = element_text(size = rel(0.5),
-                               color = "black"),
-    axis.title.x = element_text(family = "noto-sans",
-                                size = rel(0.2),
-                                color = "black"),
+    axis.text = element_text(family = "bricolage",
+                             size = rel(1.5),
+                             color = pale_blue),
+    axis.text.y = element_text(size = rel(1),
+                               color = pale_blue),
+    axis.text.x = element_blank(),
+    axis.title.x = element_text(family = "bricolage",
+                                size = rel(2.5),
+                                color = pale_blue),
     axis.title.y = element_blank(),
-    panel.grid = element_line(linewidth = 0.1),
+    panel.grid = element_blank(),
     panel.grid.major.y = element_blank(),
     panel.grid.minor.x = element_blank(),
-    plot.caption = ggtext::element_markdown(family = "noto-sans",
-                                            face = "italic",
-                                            color = "grey50",
-                                            size = 1.5,
-                                            margin = margin(t = 0)),
     panel.background = element_rect(fill = "transparent", color = NA),
     plot.background  = element_rect(fill = "transparent", color = NA))
-top10
 
 showtext_opts(dpi = 300)
 
@@ -221,180 +229,309 @@ ggsave(
   filename = here::here("images", "top10.pdf"),
   plot = top10,
   device = cairo_pdf,
-  width = 2.5, 
-  height = 2,
-  units = "in")
+  width = 14,
+  height = 8,
+  units = "in"
+  )
 
 ggsave(
   filename = here::here("images", "top10.png"),
   plot = top10,
   device = png,
-  width = 2.5, 
-  height = 2,
+  width = 14,
+  height = 8,
   units = "in")
 
 
 ```
 
 
-### Population Bar Chart
+### Population Bar Chart 
 ```{r}
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                        Disaster Events by Population                     ----
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-library(gghighlight)
+#.........................Summarize Data.........................
 
+# Create top 10 country list from referencing `top_10` bar plot.
+top10_list <- c("United States", 
+                "Philippines", 
+                "India", 
+                "China", 
+                "Japan", 
+                "Thailand", 
+                "Indonesia", 
+                "Bangladesh", 
+                "Vietnam", 
+                "Peru")
+
+# Create `pop_avg_top10` dataframe.
 pop_avg_top10 <- pop_long %>% 
+  # Filter data by the designated time frame and countries of interest.
   filter(year >= 1960, year <= 2018) %>% 
+  filter(country_name %in% top10_list) %>% 
+  # Calculate the average population for each country.
   group_by(country_name) %>% 
-  summarise(avg_population = mean(population, na.rm = TRUE), .groups = "drop") %>% 
-  filter(country_name %in% c(
-    "United States","Philippines","India","China","Japan",
-    "Thailand","Indonesia","Bangladesh","Vietnam","Peru"
-  ))
+  summarise(avg_population = mean(population, na.rm = TRUE), .groups = "drop")
 
-#mismatched <- anti_join(country_totals, pop_long, by = c("name" = "country_name"))
-
-top10_percap <- top10_df %>% 
+# Create `disaster_percap` dataframe.
+disaster_percap <- top10_df %>% 
+  # Join population average dataframe to disaster totals by country dataframe.
   left_join(pop_avg_top10, by = c("country" = "country_name")) %>% 
+  # Calculate the amount of disasters per million people in each country.
   mutate(dis_per_million = country_sum / avg_population * 1e6) %>% 
+  # Add flag image source as a new column.
   mutate(iso2 = countrycode(country, origin = "country.name", destination = "iso2c"),
          flag = paste0("https://flagcdn.com/w40/", tolower(iso2), ".png"),
          country = fct_reorder(country, country_sum))
 
-pop_bar <- ggplot(top10_percap, aes(x = dis_per_million, y = country)) +
-  geom_col(aes(fill = country == "Philippines"), alpha = 0.9) +
+#............................Bar Plot............................
+
+# Create a bar chart.
+pop_bar <- ggplot(disaster_percap, aes(x = dis_per_million, y = country)) +
+  # Fill by the conditional statement to highlight the Philippines.
+  geom_col(aes(fill = country == "Philippines"), alpha = 0.5) +
+  # Add the total value to the end of the bar.
   geom_text(
     aes(label = scales::comma(dis_per_million)),
-    hjust = -0.55,
-    color = "black",
-    size = rel(1),
-    family = "red"
-  ) +
-  # add flag images to associated country
-  geom_image(aes(image = flag), x = max(top10_percap$dis_per_million) * 0.035,
+    hjust = -0.85,
+    color = pale_blue,
+    size = 7,
+    family = "sans-serif") +
+  # Add flag images to associated country.
+  geom_image(aes(image = flag), x = max(disaster_percap$dis_per_million) * 0.03,
              size = 0.05,
              by = "width") +
+  # Bars are colored by true/false statements with designated colors.
   scale_fill_manual(
-    values = c("TRUE" = "#000080", "FALSE" = "#B8B8B8"),
-    guide = "none"
-  )  +
-scale_x_continuous(labels = scales::label_comma(),
+    values = c("TRUE" = "#DFEDF6", "FALSE" = grey_blue),
+    guide = "none")  +
+  # Expand the x-axis for for flag and total value placement.
+  scale_x_continuous(labels = scales::label_comma(),
                    expand = expansion(mult = c(0, 0.18))) +
-  labs(title = "Disaster Exposure per Million People",
-       subtitle = "When population is considered, smaller countries like the Philippines experience far more disasters relative to population size.",
-       x = "Number of Natural Disasters per Million People",
-       caption = "Data Source: NASA EarthData and World Bank Group") +
-  theme_minimal() +
+  labs(x = "Number of Natural Disasters per Million People") +
+  theme_minimal(base_size = 17) +
+  # Theme adjustments.
   theme(
-    plot.title = ggtext::element_markdown(family = "sarala",
-                                          face = "bold",
-                                          size = rel(0.5),
-                                          margin = margin(b = rel(0.8))),
-    plot.subtitle = ggtext::element_markdown(family = "sarala",
-                                             size = rel(0.2),
-                                             margin = margin(b = rel(0.8))),
-    plot.caption = ggtext::element_markdown(family = "noto-sans",
-                                            face = "italic",
-                                            color = "grey50",
-                                            size = 1.5,
-                                            margin = margin(t = 0)),
-    axis.text = element_text(family = "red",
-                             size = rel(0.5)),
-    axis.title.x = element_text(family = "noto-sans",
-                                size = rel(0.2)),
+    axis.text = element_text(family = "sans-serif",
+                             size = rel(1.5)),
+    axis.title.x = element_text(family = "bricolage",
+                                size = rel(2.3), 
+                                color = pale_blue),
     axis.title.y = element_blank(),
-    axis.text.x = element_text(size = rel(0.5)),
-    axis.text.y = element_text(size = rel(0.5),
-                               margin = margin(r = -0.5)),
-    panel.grid = element_line(linewidth = 0.1),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = rel(1),
+                               margin = margin(r = -0.5),
+                               family = "bricolage",
+                               color = pale_blue),
+    panel.grid = element_blank(),
     panel.grid.major.y = element_blank(),
     legend.position = "none",
     panel.background = element_rect(fill = "transparent", color = NA),
     plot.background  = element_rect(fill = "transparent", color = NA))
-pop_bar
-
-
 showtext_opts(dpi = 300)
 
 ggsave(
   filename = here::here("images", "pop_bar.pdf"),
   plot = pop_bar,
   device = cairo_pdf,
-  width = 2.5, 
-  height = 2,
+  width = 14.5,
+  height = 8,
   units = "in")
 
 ggsave(
   filename = here::here("images", "pop_bar.png"),
   plot = pop_bar,
   device = png,
-  width = 2.5, 
-  height = 2,
+  width = 14.5,
+  height = 8,
   units = "in")
 ```
 
 
 ### Stacked Bar (with country shape)
 ```{r}
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##                 Proportion of Natural Disasters by Country               ----
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# create a color palette for disasters
-pal <- c("drought" = "#9D836C",
-         "earthquake" = "#70815F",
-         "extreme temperature" = "#805D93",
-         "flood" = "#7B9EA8",
-         "storm" = "#F3DFA2")
+#.........................Summarize Data.........................
+# Create top 5 country list from referencing `top_10` bar plot.
+top5_countries <- c("United States", "Philippines", "India", "China", "Japan")
 
-# summarize data by country and type
-stacked_df <- nat_dis %>% 
-  filter(country %in% c("United States", "Philippines", "India", "China", "Japan")) %>% 
+# Create a `type_country` dataframe.
+type_country <- nat_dis %>% 
+  filter(country %in% top5_countries) %>% 
+  # Calculate the proportion of types of disaster for each country.
   group_by(country, disastertype) %>% 
   summarise(disastertype_count = n(), 
-            .groups = "drop") %>% 
-  mutate(country = fct_reorder(country, disastertype_count)) 
-# create a stacked bar chart
-stacked_bar <- ggplot(data = stacked_df, aes(x = country, y = disastertype_count, fill = disastertype)) +
-  geom_col(position = "fill", alpha = 0.7) +
+            .groups = "drop")
+
+#........................Stacked Bar Plot........................
+
+# Create a stacked bar chart.
+stacked_bar <- ggplot(data = type_country, aes(x = country, y = disastertype_count, fill = disastertype, color = "white")) +
+  geom_col(position = "fill", alpha = 0.65) +
+  # Color disaster type by designated palette.
   scale_fill_manual(values = pal,
                     labels = c("drought" = "Drought",
                                "earthquake" = "Earthquake",
                                "extreme temperature" = "Extreme\nTemperature",
                                "flood" = "Flood",
                                "storm" = "Storm")) +
+  scale_color_manual(values = "white")+
+  # Make y-axis labels appear as percents.
   scale_y_continuous(labels = scales::label_percent(scale = 100)) +
   labs(x = "Country",
        y = "Percentage of Disasters",
        title = "Distribution of Disaster Types, by Percentages",
        fill = "Disaster Type") +
   theme_minimal() +
+  # Theme adjustments.
   theme(
-    plot.title = ggtext::element_markdown(family = "sarala",
+    plot.title = ggtext::element_markdown(family = "bricolage",
                                           face = "bold",
                                           lineheight = 1.2),
-    axis.text = element_text(family = "red",
+    axis.text = element_text(family = "sans-serif",
                              size = rel(0.7)),
     axis.title.x = element_blank(),
-    axis.title.y = element_text(family = "noto-sans",
+    axis.title.y = element_text(family = "bricolage",
                                 size = rel(0.75), 
                                 margin = margin(t = 15)),
     legend.position = "bottom",
     legend.title.position = "bottom",
     legend.direction = "horizontal",
-    legend.text = element_text(family = "red",
+    legend.text = element_text(family = "bricolage",
                                 size = rel(0.75), 
                                 margin = margin(t = 2)),
     legend.title = element_blank(),
     legend.key.width = unit(0.5, "cm"),
-    legend.key.height = unit(0.5, "cm"))
+    legend.key.height = unit(0.5, "cm"),
+    panel.grid = element_blank())
+
+ggsave(
+  filename = here::here("images", "stacked_bar.pdf"),
+  plot = stacked_bar,
+  device = cairo_pdf,
+  width = 8,
+  height = 5,
+  units = "in")
 
 ggsave(
   filename = here::here("images", "stacked_bar.png"),
   plot = stacked_bar,
   device = png,
-  width = 3.5,
-  height = 1.6,
+  width = 8,
+  height = 5,
+  units = "in")
+```
+
+```{r}
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##              Population Displaced from Disasters (2008-2018)             ----
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#.........................Summarize Data.........................
+
+# Create top 5 country list from referencing `top_10` bar plot.
+top5_list <- c("United States", "Philippines", "India", "China", "Japan")
+
+# Create a `displaced_top5` dataframe.
+displaced_top5 <- displaced %>%
+  # Filter data by the designated time frame (2008-2018) and countries of interest.
+  filter(Entity %in% top5_list,
+         Year >= 2008, Year <= 2018) %>%
+  # Calculate the average amount of people displaced by country.
+  group_by(Entity) %>%
+  summarise(avg_displaced = mean(displaced, na.rm = TRUE), .groups = "drop")
+
+# Create a `pop_top5` dataframe.
+pop_avg_top5 <- pop_avg_top10 %>% 
+  # Filter data by countries of interest.
+  filter(country_name %in% top5_list)
+
+# Create a `displaced_pop` dataframe.
+displaced_pop <- displaced_top5 %>%
+  # Join displaced dataframe to population average dataframe.
+  left_join(pop_avg_top5, by = c("Entity" = "country_name")) %>%
+  # Calculate the amount of people displaced per million people.
+  mutate(displaced_per_million = avg_displaced / avg_population * 1e6,
+  # Divide by 1000 so that 1 square represents ~1000 displaced people per million.
+  # Cap the value at 100 so it fits in a 10x10 waffle grid.
+         displaced_sq = pmin(100, round(displaced_per_million / 1000)),
+  # Calculate people not displaced.
+         not_displaced_sq = 100 - displaced_sq) %>%
+  # Select columns needed for waffle plot.
+  select(Entity, displaced_sq, not_displaced_sq) %>%
+  # Make data long.
+  pivot_longer(
+    cols = c(displaced_sq, not_displaced_sq),
+    names_to = "group",
+    values_to = "n") %>%
+  # Rename category levels.
+  mutate(group = recode(group,
+                        displaced_sq = "Displaced",
+                        not_displaced_sq = "Not displaced"))
+
+#..........................Waffle Plot...........................
+
+# Create waffle chart.
+waffle <- ggplot(displaced_pop, aes(fill = group, values = n)) +
+  geom_waffle(n_rows = 10,
+              size = 0.1,
+              color = "white") +
+  # Create a waffle chart for each country.
+  facet_wrap(~ Entity, ncol = 5) +
+  # Set displacement colors.
+  scale_fill_manual(values = c("Displaced" = "navy",
+                               "Not displaced" = "grey85")) +
+  labs(
+    subtitle = "Each 10×10 waffle:\n1 square ≈ 1,000 displaced people per million",
+    fill = NULL) +
+  theme_minimal() +
+  # Theme adjustments.
+  theme(
+    plot.subtitle = ggtext::element_markdown(family = "bricolage",
+                                             lineheight = .5,
+                                             size = rel(1),
+                                             margin = margin(b = 1),
+                                             hjust = 0.5),
+    plot.margin = margin(t = 2, r = 2, b = 2, l = 2),
+    panel.spacing = unit(0.1, "lines"),
+    panel.grid = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    strip.text = element_text(family = "bricolage",
+                              size = rel(2),
+                              margin = margin(b = .5,
+                                              t = 1)),
+    legend.position = "none",
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background  = element_rect(fill = "transparent", color = NA))
+
+showtext_opts(dpi = 300)
+
+ggsave(
+  filename = here::here("images", "waffle.pdf"),
+  plot = waffle,
+  device = cairo_pdf,
+  width = 2,
+  height = 14.5,
+  units = "in")
+
+ggsave(
+  filename = here::here("images", "waffle.png"),
+  plot = waffle,
+  device = png,
+  width = 14,
+  height = 6,
   units = "in")
 
 ```
 
+#### Experimenting with other graphs
 
 ### Stream Graph
 ```{r}
@@ -451,6 +588,7 @@ ggsave(
 #     legend.key.width = unit(0.5, "cm"),
 #     panel.spacing.x = unit(1.3, "lines"))
 ```
+
 # top 10 stream
 ```{r}
 # library(dplyr)
@@ -570,519 +708,147 @@ ggsave(
 ```
 
 ```{r}
-displaced <- read_csv(here::here("data", "internally-displaced-persons-from-disasters", "internally-displaced-persons-from-disasters.csv")) %>% 
-  rename("displaced" = "Internally displaced persons, new displacement associated with disasters (number of cases)")
-```
-```{r}
-top_displaced <- displaced %>% 
-  group_by(Entity) %>% 
-  summarise(total_displaced = sum(displaced,
-                                  na.rm = TRUE)) %>% 
-  slice_max(total_displaced, n = 25) %>% 
-  filter(Entity %in% c(
-    "United States", "Philippines", "India", "China", "Japan",
-    "Thailand", "Indonesia", "Bangladesh", "Vietnam", "Peru"
-  )) %>% 
-  mutate(iso2 = countrycode(Entity, origin = "country.name", destination = "iso2c"),
-         flag = paste0("https://flagcdn.com/w40/", tolower(iso2), ".png"),
-         country = factor(Entity, 
-                          levels = c("United States", "Philippines", "India","China", "Japan", "Thailand", "Indonesia", "Bangladesh", "Vietnam", "Peru"
-  )))
-
-ggplot(top_displaced,
-       aes(x = total_displaced,
-           y = country)) +
-  geom_col(fill = "grey40") +
-  geom_image(aes(image = flag), x = 0 * max(top10$country_sum), size = rel(0.05)) +
-  scale_x_continuous(labels = scales::label_comma()) +
-  labs(
-    title = "Countries with the Most Disaster Displacement (Internally)",
-    x = "Total People Displaced",
-    y = "Country"
-  ) +
-  theme_minimal()
+# displaced <- read_csv(here::here("data", "internally-displaced-persons-from-disasters", "internally-displaced-persons-from-disasters.csv")) %>% 
+#   rename("displaced" = "Internally displaced persons, new displacement associated with disasters (number of cases)")
 ```
 
-
-
-
 ```{r}
-
-pop_displaced <- displaced %>%
-  left_join(
-    pop_long %>% 
-      select(country_name, year, population),
-    by = c("Entity" = "country_name", "Year" = "year")
-  )
-
-pop_displaced_top10 <- pop_displaced %>%
-  filter(Entity %in% c("United States", "Philippines", "India","China", "Japan", "Thailand", "Indonesia", "Bangladesh", "Vietnam", "Peru"),
-         Year %in% 2008:2018) %>% 
-  mutate(displaced_per_million = displaced / population * 1e6) %>% 
-  group_by(Entity) %>%
-  summarise(
-    avg_displaced_per_million = mean(displaced_per_million, na.rm = TRUE),
-    .groups = "drop") %>% 
-mutate(iso2 = countrycode(Entity, origin = "country.name", destination = "iso2c"),
-         flag = paste0("https://flagcdn.com/w40/", tolower(iso2), ".png"),
-       Entity = factor(Entity, levels = rev(c("United States", "Philippines", "India","China", "Japan", "Thailand", "Indonesia", "Bangladesh", "Vietnam", "Peru"
-  ))))
-
-displaced_bar <- ggplot(pop_displaced_top10,
-       aes(x = avg_displaced_per_million, y = Entity)) +
-  geom_col(fill = "black",
-           alpha = 0.5) +
-  geom_image(aes(image = flag), x = 0 * max(top10_df$country_sum), size = rel(0.05)) +
-  labs(
-    title = "Amount of People per Million Internally Displaced by Disasters",
-    x = "Displaced per Million People") +
-  scale_x_continuous(labels = scales::label_comma(),
-                     limits = c(0, 40000),
-                     breaks = c(seq(0, 40000, by = 10000), 40000)) +
-  theme_minimal()+
-  theme(
-    plot.title = ggtext::element_markdown(family = "sarala",
-                                          face = "bold",
-                                          lineheight = 1.2,
-                                          size = rel(0.4),
-                                          hjust = 0.5),
-    axis.text = element_text(family = "red",
-                             size = rel(0.5)),
-    axis.text.y = element_text(size = rel(0.5),
-                               margin = margin(r = -0.5)),
-    axis.text.x = element_text(size = rel(0.5)),
-    axis.title.x = element_text(family = "noto-sans",
-                                size = rel(0.2)),
-    axis.title.y = element_blank(),
-    panel.grid = element_line(linewidth = 0.1),
-    panel.grid.major.y = element_blank(),
-    plot.caption = ggtext::element_markdown(family = "noto-sans",
-                                            face = "italic",
-                                            color = "grey50",
-                                            size = 1.5,
-                                            margin = margin(t = 0)))
-
-
-showtext_opts(dpi = 300)
-
-ggsave(
-  filename = here::here("images", "displaced.pdf"),
-  plot = displaced_bar,
-  device = cairo_pdf,
-  width = 2.5,
-  height = 1.5,
-  units = "in")
+# top_displaced <- displaced %>% 
+#   group_by(Entity) %>% 
+#   summarise(total_displaced = sum(displaced,
+#                                   na.rm = TRUE)) %>% 
+#   slice_max(total_displaced, n = 25) %>% 
+#   filter(Entity %in% c(
+#     "United States", "Philippines", "India", "China", "Japan",
+#     "Thailand", "Indonesia", "Bangladesh", "Vietnam", "Peru"
+#   )) %>% 
+#   mutate(iso2 = countrycode(Entity, origin = "country.name", destination = "iso2c"),
+#          flag = paste0("https://flagcdn.com/w40/", tolower(iso2), ".png"),
+#          country = factor(Entity, 
+#                           levels = c("United States", "Philippines", "India","China", "Japan", "Thailand", "Indonesia", "Bangladesh", "Vietnam", "Peru"
+#   )))
+# 
+# ggplot(top_displaced,
+#        aes(x = total_displaced,
+#            y = country)) +
+#   geom_col(fill = "grey40") +
+#   geom_image(aes(image = flag), x = 0 * max(top10$country_sum), size = rel(0.05)) +
+#   scale_x_continuous(labels = scales::label_comma()) +
+#   labs(
+#     title = "Countries with the Most Disaster Displacement (Internally)",
+#     x = "Total People Displaced",
+#     y = "Country"
+#   ) +
+#   theme_minimal()
 ```
 
 
-```{r}
-library(dplyr)
-library(waffle)
-library(tidyr)
-library(ggplot2)
-
-top5_countries <- c("United States", "Philippines", "India", "China", "Japan")
-```
 
 
 ```{r}
-pop_top10 <- pop_long %>%
-  filter(
-    country_name %in% top5_countries,
-    year >= 2008, year <= 2018
-  ) %>%
-  group_by(country_name) %>%
-  summarise(avg_population = mean(population, na.rm = TRUE), .groups = "drop")
 
-displaced_top10 <- displaced %>%
-  filter(
-    Entity %in% top5_countries,
-    Year >= 2008, Year <= 2018
-  ) %>%
-  group_by(Entity) %>%
-  summarise(avg_displaced = mean(displaced, na.rm = TRUE), .groups = "drop")
-
-waffle_df <- displaced_top10 %>%
-  left_join(pop_top10, by = c("Entity" = "country_name")) %>%
-  mutate(
-    displaced_per_million = avg_displaced / avg_population * 1e6,
-    displaced_sq = pmin(100, round(displaced_per_million / 1000)),
-    not_displaced_sq = 100 - displaced_sq
-  )
-
-waffle_long <- waffle_df %>%
-  select(Entity, displaced_sq, not_displaced_sq) %>%
-  pivot_longer(
-    cols = c(displaced_sq, not_displaced_sq),
-    names_to = "group",
-    values_to = "n"
-  ) %>%
-  mutate(
-    group = recode(
-      group,
-      displaced_sq = "Displaced",
-      not_displaced_sq = "Not displaced"
-    )
-  ) %>% 
-  mutate(
-    Entity = factor(
-      Entity,
-      levels = c("United States", "Philippines", "India", "China", "Japan")
-    )
-  )
-
-waffle <- ggplot(waffle_long, aes(fill = group, values = n)) +
-  geom_waffle(n_rows = 10,
-              size = 0.25,
-              color = "white") +
-  facet_wrap(~ Entity, ncol = 5) +
-  scale_fill_manual(values = c("Displaced" = "navy",
-                               "Not displaced" = "grey85")) +
-  labs(
-    title = "Average Annual Disaster Displacement<br>Relative to Population",
-    subtitle = "Each 10×10 waffle:\n1 square ≈ 1,000 displaced people per million",
-    fill = NULL) +
-  theme_minimal() +
-  theme(
-    plot.title = ggtext::element_markdown(family = "sarala",
-                                          face = "bold",
-                                          size = rel(0.8),
-                                          hjust = 0.5,
-                                          margin = margin(b = 0.5)),
-    plot.subtitle = ggtext::element_markdown(family = "sarala",
-                                             lineheight = .5,
-                                             size = rel(0.3),
-                                             margin = margin(b = 1),
-                                             hjust = 0.5),
-    plot.margin = margin(t = 5, r = 3, b = 3, l = 5),
-    panel.spacing = unit(0.1, "lines"),
-    panel.grid = element_blank(),
-    axis.text = element_blank(),
-    axis.title = element_blank(),
-    axis.ticks = element_blank(),
-    strip.text = element_text(family = "red",
-                              size = rel(0.4),
-                              margin = margin(b = .5,
-                                              t = 1)),
-    legend.position = "none")
-
-
-showtext_opts(dpi = 300)
-
-ggsave(
-  filename = here::here("images", "waffle.pdf"),
-  plot = waffle,
-  device = cairo_pdf,
-  width = 3.5,
-  height = 1.6,
-  units = "in")
-
-ggsave(
-  filename = here::here("images", "waffle.png"),
-  plot = waffle,
-  device = png,
-  width = 3.5,
-  height = 1.6,
-  units = "in")
-
-```
-
-
-```{r}
-library(sf)
-library(ggplot2)
-library(rnaturalearth)
-
-world <- ne_countries(scale = "medium", returnclass = "sf")
-
-world <- ggplot() +
-  geom_sf(data = world, fill = "white", color = "black", linewidth = 0.1) +
-  coord_sf(crs = "+proj=robin", expand = FALSE) +
-  theme_void() +
-  theme(
-    panel.grid.major = element_line(color = "grey65", linewidth = 0.1),
-    panel.grid.minor = element_line(color = "grey65", linewidth = 0.1),
-    panel.background = element_rect(fill = "white", color = NA),
-    plot.background = element_rect(fill = "white", color = NA),
-  )
-
+# pop_displaced <- displaced %>%
+#   left_join(
+#     pop_long %>% 
+#       select(country_name, year, population),
+#     by = c("Entity" = "country_name", "Year" = "year")
+#   )
+# 
+# pop_displaced_top10 <- pop_displaced %>%
+#   filter(Entity %in% c("United States", "Philippines", "India","China", "Japan", "Thailand", "Indonesia", "Bangladesh", "Vietnam", "Peru"),
+#          Year %in% 2008:2018) %>% 
+#   mutate(displaced_per_million = displaced / population * 1e6) %>% 
+#   group_by(Entity) %>%
+#   summarise(
+#     avg_displaced_per_million = mean(displaced_per_million, na.rm = TRUE),
+#     .groups = "drop") %>% 
+# mutate(iso2 = countrycode(Entity, origin = "country.name", destination = "iso2c"),
+#          flag = paste0("https://flagcdn.com/w40/", tolower(iso2), ".png"),
+#        Entity = factor(Entity, levels = rev(c("United States", "Philippines", "India","China", "Japan", "Thailand", "Indonesia", "Bangladesh", "Vietnam", "Peru"
+#   ))))
+# 
+# displaced_bar <- ggplot(pop_displaced_top10,
+#        aes(x = avg_displaced_per_million, y = Entity)) +
+#   geom_col(fill = "black",
+#            alpha = 0.5) +
+#   geom_image(aes(image = flag), x = 0 * max(top10_df$country_sum), size = rel(0.05)) +
+#   labs(
+#     title = "Amount of People per Million Internally Displaced by Disasters",
+#     x = "Displaced per Million People") +
+#   scale_x_continuous(labels = scales::label_comma(),
+#                      limits = c(0, 40000),
+#                      breaks = c(seq(0, 40000, by = 10000), 40000)) +
+#   theme_minimal()+
+#   theme(
+#     plot.title = ggtext::element_markdown(family = "sarala",
+#                                           face = "bold",
+#                                           lineheight = 1.2,
+#                                           size = rel(0.4),
+#                                           hjust = 0.5),
+#     axis.text = element_text(family = "red",
+#                              size = rel(0.5)),
+#     axis.text.y = element_text(size = rel(0.5),
+#                                margin = margin(r = -0.5)),
+#     axis.text.x = element_text(size = rel(0.5)),
+#     axis.title.x = element_text(family = "noto-sans",
+#                                 size = rel(0.2)),
+#     axis.title.y = element_blank(),
+#     panel.grid = element_line(linewidth = 0.1),
+#     panel.grid.major.y = element_blank(),
+#     plot.caption = ggtext::element_markdown(family = "noto-sans",
+#                                             face = "italic",
+#                                             color = "grey50",
+#                                             size = 1.5,
+#                                             margin = margin(t = 0)))
+# 
+# 
+# showtext_opts(dpi = 300)
+# 
 # ggsave(
-#   "world.png",
-#   plot = world,
-#   width = 3.5,
+#   filename = here::here("images", "displaced.pdf"),
+#   plot = displaced_bar,
+#   device = cairo_pdf,
+#   width = 2.5,
 #   height = 1.5,
-#   dpi = 300,
-#   bg = "transparent"
-# )
-
-showtext_opts(dpi = 300)
-
-ggsave(
-  filename = here::here("images", "world.pdf"),
-  plot = world,
-  device = cairo_pdf,
-  width = 4.5,
-  height = 1.6,
-  units = "in",
-  bg = "transparent")
-
-```
-
-
-```{r}
-#install.packages("ggpattern")
-library(ggpattern)
-
-library(dplyr)
-library(ggplot2)
-library(ggpattern)
-library(forcats)
-library(ggtext)
-library(scales)
-
-nat_dis %>% 
-  filter(country %in% c("United States", "Philippines", "India", "China", "Japan")) %>% 
-  group_by(country, disastertype) %>% 
-  summarise(
-    disastertype_count = n(),
-    .groups = "drop"
-  ) %>% 
-  mutate(
-    country = factor(
-      country,
-      levels = c("United States", "Philippines", "India", "China", "Japan")
-    )
-  ) %>% 
-  ggplot(
-    aes(
-      x = country,
-      y = disastertype_count,
-      fill = disastertype,
-      pattern = disastertype
-    )
-  ) +
-  geom_col_pattern(
-    position = "fill",
-    alpha = 0.9,
-    color = "white",
-    linewidth = 0.3,
-    pattern_fill = "black",
-    pattern_colour = "black",
-    pattern_alpha = 0.18,
-    pattern_density = 0.25,
-    pattern_spacing = 0.04
-  ) +
-  scale_fill_manual(
-    values = pal,
-    labels = c(
-      "drought" = "Drought",
-      "earthquake" = "Earthquake",
-      "extreme temperature" = "Extreme\nTemperature",
-      "flood" = "Flood",
-      "storm" = "Storm"
-    )
-  ) +
-  scale_pattern_manual(
-    values = c(
-      "drought" = "none",
-      "earthquake" = "circle",
-      "extreme temperature" = "stripe",
-      "flood" = "wave",
-      "storm" = "crosshatch"
-    ),
-    labels = c(
-      "drought" = "Drought",
-      "earthquake" = "Earthquake",
-      "extreme temperature" = "Extreme\nTemperature",
-      "flood" = "Flood",
-      "storm" = "Storm"
-    )
-  ) +
-  scale_y_continuous(labels = label_percent(scale = 100)) +
-  labs(
-    title = "Distribution of Disaster Types by Country",
-    subtitle = "Floods and storms dominate, but the composition of disaster types differs across countries.",
-    x = NULL,
-    y = "Percentage of Disasters",
-    fill = NULL,
-    pattern = NULL
-  ) +
-  theme_minimal() +
-  theme(
-    plot.title = ggtext::element_markdown(
-      family = "sarala",
-      face = "bold",
-      lineheight = 1.2,
-      size = rel(1)
-    ),
-    plot.subtitle = ggtext::element_markdown(
-      family = "noto-sans",
-      size = rel(0.8),
-      margin = margin(b = 10)
-    ),
-    axis.text = element_text(
-      family = "red",
-      size = rel(0.75)
-    ),
-    axis.title.y = element_text(
-      family = "noto-sans",
-      size = rel(0.8),
-      margin = margin(r = 15)
-    ),
-    legend.position = "bottom",
-    legend.text = element_text(
-      family = "red",
-      size = rel(0.75)
-    ),
-    legend.key.width = unit(0.55, "cm"),
-    legend.key.height = unit(0.55, "cm"),
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank()
-  ) +
-  guides(fill = "none")
-```
-```{r}
-library(dplyr)
-library(ggplot2)
-library(ggpattern)
-library(ggtext)
-library(scales)
-
-stacked <- nat_dis %>% 
-  filter(country %in% c("United States", "Philippines", "India", "China", "Japan")) %>% 
-  group_by(country, disastertype) %>% 
-  summarise(
-    disastertype_count = n(),
-    .groups = "drop"
-  ) %>% 
-  mutate(
-    country = factor(
-      country,
-      levels = c("United States", "Philippines", "India", "China", "Japan")
-    )
-  ) %>% 
-  group_by(country) %>% 
-  mutate(prop = disastertype_count / sum(disastertype_count)) 
-
-  stacked_bar <- ggplot(data = stacked,
-    aes(
-      x = country,
-      y = disastertype_count,
-      fill = disastertype
-    )
-  ) +
-  geom_col_pattern(
-    position = "fill",
-    pattern = "circle",
-    alpha = 0.6,
-    color = "white",
-    linewidth = 0.3,
-    pattern_fill = "black",
-    pattern_colour = "black",
-    pattern_alpha = 0.1,
-    pattern_density = 0.08,
-    pattern_spacing = 0.08,
-    pattern_size = 0.1
-  ) +
-  scale_fill_manual(
-    values = pal,
-    labels = c(
-      "drought" = "Drought",
-      "earthquake" = "Earthquake",
-      "extreme temperature" = "Extreme\nTemperature",
-      "flood" = "Flood",
-      "storm" = "Storm"
-    )
-  ) +
-  scale_y_continuous(labels = label_percent(scale = 100)) +
-  labs(
-    title = "Distribution of Disaster Types by Country",
-    subtitle = "Disaster composition differs across countries, with floods and storms making up the largest shares.",
-    x = NULL,
-    y = "Percentage of Disasters",
-    fill = NULL
-  ) +
-  theme_minimal() +
-  theme(
-    plot.title = ggtext::element_markdown(
-      family = "sarala",
-      face = "bold",
-      lineheight = 1.2,
-      size = rel(1)
-    ),
-    plot.subtitle = ggtext::element_markdown(
-      family = "noto-sans",
-      size = rel(0.8),
-      margin = margin(b = 10)
-    ),
-    axis.text = element_text(
-      family = "red",
-      size = rel(0.75)
-    ),
-    axis.title.y = element_text(
-      family = "noto-sans",
-      size = rel(0.8),
-      margin = margin(r = 15)
-    ),
-    legend.position = "bottom",
-    legend.text = element_text(
-      family = "red",
-      size = rel(0.75)
-    ),
-    legend.key.width = unit(0.55, "cm"),
-    legend.key.height = unit(0.55, "cm"),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  )
-
-ggsave(
-  filename = here::here("images", "stacked_bar.pdf"),
-  plot = stacked_bar,
-  device = cairo_pdf,
-  width = 8,
-  height = 6,
-  units = "in",
-  bg = "transparent")
+#   units = "in")
 ```
 
 ```{r}
-plot_df <- nat_dis %>% 
-  filter(country %in% c("United States", "Philippines", "India", "China", "Japan")) %>% 
-  group_by(country, disastertype) %>% 
-  summarise(disastertype_count = n(), .groups = "drop") %>% 
-  group_by(country) %>% 
-  mutate(prop = disastertype_count / sum(disastertype_count))
+# library(sf)
+# library(ggplot2)
+# library(rnaturalearth)
+# 
+# world <- ne_countries(scale = "medium", returnclass = "sf")
+# 
+# world <- ggplot() +
+#   geom_sf(data = world, fill = "white", color = "black", linewidth = 0.1) +
+#   coord_sf(crs = "+proj=robin", expand = FALSE) +
+#   theme_void() +
+#   theme(
+#     panel.grid.major = element_line(color = "grey65", linewidth = 0.1),
+#     panel.grid.minor = element_line(color = "grey65", linewidth = 0.1),
+#     panel.background = element_rect(fill = "white", color = NA),
+#     plot.background = element_rect(fill = "white", color = NA),
+#   )
+# 
+# # ggsave(
+# #   "world.png",
+# #   plot = world,
+# #   width = 3.5,
+# #   height = 1.5,
+# #   dpi = 300,
+# #   bg = "transparent"
+# # )
+# 
+# showtext_opts(dpi = 300)
+# 
+# ggsave(
+#   filename = here::here("images", "world.pdf"),
+#   plot = world,
+#   device = cairo_pdf,
+#   width = 4.5,
+#   height = 1.6,
+#   units = "in",
+#   bg = "transparent")
 
-ggplot(plot_df,
-  aes(
-    x = country,
-    y = disastertype_count,
-    fill = disastertype
-  )
-) +
-geom_col_pattern(
-  position = "fill",
-  pattern = "circle",
-  pattern_density = 0.08,
-  pattern_spacing = 0.08,
-  pattern_size = 0.15,
-  pattern_fill = "black",
-  pattern_alpha = 0.18,
-  color = "white",
-  linewidth = 0.3
-) +
-geom_text(
-  aes(label = scales::percent(prop, accuracy = 1)),
-  position = position_fill(vjust = 0.5),
-  size = 3,
-  family = "red",
-  color = "white"
-)
 ```
-
-
-
-### Body
-3. The body of your blog post should address your approach and decisions for the ten design elements listed in the final project description (though you are welcome and encouraged to comment on any others that are not explicitly listed). You may choose to render and refer to individual / component data visualizations throughout the body of your blog post, as necessary or appropriate – if you do so, be sure to suppress code from printing.
-
-
